@@ -11,7 +11,7 @@ const result = document.querySelector('#result');
 const resetBtn = document.querySelector('#reset');
 
 function freshState(mode='full'){
-  return {order:[],i:0,frontier:0,answers:{},hints:{},flags:{},revealed:{},mode,seed:Math.floor(Math.random()*0x7fffffff),catalogVersion:ACTIVE_TYPE===3?207:null};
+  return {order:[],i:0,frontier:0,answers:{},hints:{},flags:{},revealed:{},mode,seed:Math.floor(Math.random()*0x7fffffff),catalogVersion:ACTIVE_TYPE===3?207:null,baseState:null};
 }
 
 function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
@@ -129,6 +129,32 @@ function answeredItems(){
   return Object.entries(S.answers).map(([id,a])=>({q:Q.find(x=>x.id===Number(id)),...a})).filter(x=>x.q);
 }
 
+function startErrorReview(ids){
+  if(!ids.length)return;
+  let base;
+  if(S.mode==='wrong' && S.baseState){
+    base=S.baseState;
+  }else{
+    base=JSON.parse(JSON.stringify(S));
+    base.baseState=null;
+  }
+  const next=freshState('wrong');
+  next.order=shuffle(ids);
+  next.baseState=base;
+  S=next;
+  save();
+  renderQ();
+}
+
+function restoreBaseState(showResults=true){
+  if(!S.baseState)return;
+  S=S.baseState;
+  S.baseState=null;
+  save();
+  if(showResults)results();
+  else homeView();
+}
+
 function chooserView(){
   ACTIVE_TYPE=null;Q=[];S=null;
   chooser.classList.remove('hidden');
@@ -201,25 +227,32 @@ function homeView(){
   }
   const p1=Q.filter(x=>x.part==='Teil 1').length,p2=Q.filter(x=>x.part==='Teil 2').length;
   const canResume=S.order.length&&S.frontier<S.order.length;
-  const title=ACTIVE_TYPE===1?'Gesamtdiagnose':'Folien-Detailtrainer';
-  const description=ACTIVE_TYPE===1
-    ?'Der ursprüngliche 117er-Test bleibt unverändert und mischt Grundlagen, Komplexchemie und Stoffchemie.'
-    :'Dieser Pool fragt gezielt kleine Folienfakten, Verfahren, Reaktionsgleichungen, MO/LGO, Strukturdetails und Auswendiglernstoff ab.';
+  const isReview=S.mode==='wrong';
+  const title=isReview?'Fehlerwiederholung':(ACTIVE_TYPE===1?'Gesamtdiagnose':'Folien-Detailtrainer');
+  const description=isReview
+    ?'Du bearbeitest nur die zuvor falschen Fragen. Die ursprüngliche Gesamtauswertung bleibt im Hintergrund erhalten.'
+    :(ACTIVE_TYPE===1
+      ?'Der ursprüngliche 117er-Test bleibt unverändert und mischt Grundlagen, Komplexchemie und Stoffchemie.'
+      :'Dieser Pool fragt gezielt kleine Folienfakten, Verfahren, Reaktionsgleichungen, MO/LGO, Strukturdetails und Auswendiglernstoff ab.');
   home.innerHTML=`
-    <div class="hero"><span class="topic">Fragentyp ${ACTIVE_TYPE}</span><h2>${title}</h2><p class="muted">${description}</p></div>
+    <div class="hero"><span class="topic">Fragentyp ${ACTIVE_TYPE}${isReview?' · Fehlerwiederholung':''}</span><h2>${title}</h2><p class="muted">${description}</p></div>
     <div class="grid">
       <div class="stat"><strong>${Q.length}</strong>Fragen im Pool</div>
-      <div class="stat"><strong>${done}</strong>beantwortet</div>
+      <div class="stat"><strong>${done}</strong>in dieser Runde beantwortet</div>
       <div class="stat"><strong>${p1}</strong>Teil 1</div>
       <div class="stat"><strong>${p2}</strong>Teil 2</div>
     </div>
     <div class="actions">
-      <button class="primary" id="start">${canResume?'Fortsetzen':'Starten'}</button>
+      ${canResume?'<button class="primary" id="start">'+(isReview?'Fehlerwiederholung fortsetzen':'Fortsetzen')+'</button>':(!isReview?'<button class="primary" id="start">Starten</button>':'')}
       ${done?'<button class="secondary" id="showres">Zwischenauswertung</button>':''}
+      ${isReview&&S.baseState?'<button class="secondary" id="restorebase">Zur ursprünglichen Auswertung</button>':''}
       <button class="ghost" id="backtypes">Fragentyp wechseln</button>
     </div>`;
-  document.querySelector('#start').onclick=startFull;
+  const startBtn=document.querySelector('#start');
+  if(startBtn)startBtn.onclick=isReview?jumpToCurrentQuestion:startFull;
   if(done)document.querySelector('#showres').onclick=results;
+  const restoreBtn=document.querySelector('#restorebase');
+  if(restoreBtn)restoreBtn.onclick=()=>restoreBaseState(true);
   document.querySelector('#backtypes').onclick=chooserView;
 }
 
@@ -373,10 +406,12 @@ function results(){
     <h2>Auswertung · Fragentyp ${ACTIVE_TYPE}</h2>
     <div class="grid"><div class="stat"><strong>${correct}/${ans.length}</strong>richtig</div><div class="stat"><strong>${pct}%</strong>Trefferquote</div><div class="stat"><strong>${hints}</strong>Hinweise</div><div class="stat"><strong>${unsure}</strong>unsicher</div></div>
     <table class="result-table"><thead><tr><th>Thema</th><th>Richtig</th><th>Quote</th><th>Hinweise</th><th>Unsicher</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="actions"><button class="primary" id="resume">${S.frontier<S.order.length?'Test fortsetzen':'Zur Übersicht'}</button>${wrong.length?'<button class="secondary" id="retry">Nur Fehler wiederholen</button>':''}<button class="secondary" id="copy">Ergebnisbericht kopieren</button><button class="ghost" id="backtypes">Fragentyp wechseln</button></div>
+    <div class="actions"><button class="primary" id="resume">${S.frontier<S.order.length?'Test fortsetzen':'Zur Übersicht'}</button>${wrong.length?'<button class="secondary" id="retry">Nur Fehler wiederholen</button>':''}${S.mode==='wrong'&&S.baseState?'<button class="secondary" id="restorebase">Zur ursprünglichen Auswertung</button>':''}<button class="secondary" id="copy">Ergebnisbericht kopieren</button><button class="ghost" id="backtypes">Fragentyp wechseln</button></div>
     <h3>Bericht für ChatGPT</h3><textarea class="report" id="report" readonly>${esc(report)}</textarea>`;
   document.querySelector('#resume').onclick=()=>S.frontier<S.order.length?jumpToCurrentQuestion():homeView();
-  if(wrong.length)document.querySelector('#retry').onclick=()=>{const ids=wrong.map(x=>x.q.id);S=freshState('wrong');S.order=shuffle(ids);save();renderQ()};
+  if(wrong.length)document.querySelector('#retry').onclick=()=>startErrorReview(wrong.map(x=>x.q.id));
+  const restoreBtn=document.querySelector('#restorebase');
+  if(restoreBtn)restoreBtn.onclick=()=>restoreBaseState(true);
   document.querySelector('#copy').onclick=async e=>{const text=document.querySelector('#report').value;try{await navigator.clipboard.writeText(text);e.currentTarget.textContent='Kopiert ✓'}catch{document.querySelector('#report').focus();document.querySelector('#report').select();e.currentTarget.textContent='Text markiert'}};
   document.querySelector('#backtypes').onclick=chooserView;
 }
