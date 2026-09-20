@@ -42,17 +42,17 @@ function optionOrder(q){
   return a;
 }
 
-function storageKey(type){return type===1?'amoc-type1-v1':type===2?'amoc-type2-v1':'amoc-type3-v1'}
+function storageKey(type){return type===1?'amoc-type1-v1':type===2?'amoc-type2-v1':type===4?'amoc-type4-v1':'amoc-type3-v1'}
 function migrateLegacyType1(){
   if(localStorage.getItem('amoc-type1-v1')) return;
   const legacy=localStorage.getItem('amoc-diagnostic-v2');
   if(legacy) localStorage.setItem('amoc-type1-v1',legacy);
 }
-function reportKey(type){return type===1?'amoc-type1-last-report':type===2?'amoc-type2-last-report':'amoc-type3-last-report'}
+function reportKey(type){return type===1?'amoc-type1-last-report':type===2?'amoc-type2-last-report':type===4?'amoc-type4-last-report':'amoc-type3-last-report'}
 
 function loadType(type){
   ACTIVE_TYPE=type;
-  Q=(type===1?window.AMOC_TYPE1:type===2?window.AMOC_TYPE2:window.AMOC_TYPE3)||[];
+  Q=(type===1?window.AMOC_TYPE1:type===2?window.AMOC_TYPE2:type===4?window.AMOC_TYPE4:window.AMOC_TYPE3)||[];
   LS=storageKey(type);
   LAST_REPORT=reportKey(type);
   try{S=JSON.parse(localStorage.getItem(LS)||'null')||freshState()}catch{S=freshState()}
@@ -160,32 +160,40 @@ function chooserView(){
   chooser.classList.remove('hidden');
   home.classList.add('hidden');quiz.classList.add('hidden');result.classList.add('hidden');
   resetBtn.classList.add('hidden');
-  const t1=(window.AMOC_TYPE1||[]).length,t2=(window.AMOC_TYPE2||[]).length,t3=(window.AMOC_TYPE3||[]).length;
+  const t1=(window.AMOC_TYPE1||[]).length;
+  const t2=(window.AMOC_TYPE2||[]).length;
+  const t4=(window.AMOC_TYPE4||[]).length;
+  const t3=(window.AMOC_TYPE3||[]).length;
   chooser.innerHTML=`
-    <div class="hero"><span class="topic">AMOC SS26 · AC2 Antestat</span><h2>Welchen Fragenkatalog möchtest du?</h2>
-    <p class="muted">Die drei Pools sind getrennt. Fortschritt und Ergebnisse werden unabhängig voneinander gespeichert.</p></div>
+    <div class="hero"><span class="topic">Anorganische Molekülchemie · AC2</span><h2>Welchen Fragenkatalog möchtest du?</h2>
+    <p class="muted">Die drei AMOC-Pools und der Antestat-Trainer sind vollständig getrennt. Fortschritt und Ergebnisse werden unabhängig voneinander gespeichert.</p></div>
     <div class="type-grid">
       <button class="type-card" id="type1">
-        <span class="type-label">Fragentyp 1</span>
+        <span class="type-label">AMOC Fragentyp 1</span>
         <strong>Gesamtdiagnose</strong>
-        <span>${t1} Fragen · dein bisheriger 117er-Pool · breit gemischt</span>
+        <span>${t1} Fragen · breiter Grundlagen- und Stoffchemie-Check</span>
       </button>
       <button class="type-card" id="type2">
-        <span class="type-label">Fragentyp 2</span>
+        <span class="type-label">AMOC Fragentyp 2</span>
         <strong>Folien-Detailtrainer</strong>
-        <span>${t2} Fragen · gezielt, auswendiglernlastig, Verfahren, Reaktionen, Spezialdetails</span>
+        <span>${t2} Fragen · Verfahren, Reaktionen, MO/LGO und Spezialdetails</span>
+      </button>
+      <button class="type-card" id="type4">
+        <span class="type-label">AMOC Fragentyp 3</span>
+        <strong>Neue Folienlücken</strong>
+        <span>${t4} neue Fragen · nur relevante Folieninhalte, die in Fragentyp 1 und 2 noch nicht getestet wurden</span>
       </button>
       <button class="type-card" id="type3">
-        <span class="type-label">Fragentyp 3</span>
+        <span class="type-label">AC2 Antestat</span>
         <strong>207er Antestat-Trainer</strong>
         <span>${t3} Originalaufgaben · Multiple Choice, Richtig/Falsch und Reaktionsgleichungen</span>
       </button>
     </div>`;
   document.querySelector('#type1').onclick=()=>loadType(1);
   document.querySelector('#type2').onclick=()=>loadType(2);
+  document.querySelector('#type4').onclick=()=>loadType(4);
   document.querySelector('#type3').onclick=()=>loadType(3);
 }
-
 function homeView(){
   chooser.classList.add('hidden');home.classList.remove('hidden');quiz.classList.add('hidden');result.classList.add('hidden');
   const done=Object.keys(S.answers).length;
@@ -196,7 +204,7 @@ function homeView(){
     const marked=Q.filter(q=>q.priority>=2).length;
     const canResume=S.order.length&&S.frontier<S.order.length;
     home.innerHTML=`
-      <div class="hero"><span class="topic">Fragentyp 3 · 207er Antestat</span><h2>207er Antestat-Trainer</h2>
+      <div class="hero"><span class="topic">AC2 · 207er Antestat</span><h2>207er Antestat-Trainer</h2>
       <p class="muted">Alle 207 Originalaufgaben aus dem Antestat-Katalog. Du kannst sie gemischt oder nach Original-Aufgabentyp trainieren. Deine persönlich markierten Aufgaben bleiben zusätzlich als eigener Modus erhalten.</p></div>
       <div class="grid">
         <div class="stat"><strong>${Q.length}</strong>Aufgaben gesamt</div>
@@ -228,14 +236,17 @@ function homeView(){
   const p1=Q.filter(x=>x.part==='Teil 1').length,p2=Q.filter(x=>x.part==='Teil 2').length;
   const canResume=S.order.length&&S.frontier<S.order.length;
   const isReview=S.mode==='wrong';
-  const title=isReview?'Fehlerwiederholung':(ACTIVE_TYPE===1?'Gesamtdiagnose':'Folien-Detailtrainer');
+  const displayType=ACTIVE_TYPE===4?3:ACTIVE_TYPE;
+  const title=isReview?'Fehlerwiederholung':(ACTIVE_TYPE===1?'Gesamtdiagnose':ACTIVE_TYPE===2?'Folien-Detailtrainer':'Neue Folienlücken');
   const description=isReview
     ?'Du bearbeitest nur die zuvor falschen Fragen. Die ursprüngliche Gesamtauswertung bleibt im Hintergrund erhalten.'
     :(ACTIVE_TYPE===1
       ?'Der ursprüngliche 117er-Test bleibt unverändert und mischt Grundlagen, Komplexchemie und Stoffchemie.'
-      :'Dieser Pool fragt gezielt kleine Folienfakten, Verfahren, Reaktionsgleichungen, MO/LGO, Strukturdetails und Auswendiglernstoff ab.');
+      :ACTIVE_TYPE===2
+        ?'Dieser Pool fragt gezielt kleine Folienfakten, Verfahren, Reaktionsgleichungen, MO/LGO, Strukturdetails und Auswendiglernstoff ab.'
+        :'Dieser Pool enthält ausschließlich neue, folienbasierte Lernpunkte, die in AMOC Fragentyp 1 und 2 noch nicht gezielt abgefragt wurden.');
   home.innerHTML=`
-    <div class="hero"><span class="topic">Fragentyp ${ACTIVE_TYPE}${isReview?' · Fehlerwiederholung':''}</span><h2>${title}</h2><p class="muted">${description}</p></div>
+    <div class="hero"><span class="topic">AMOC Fragentyp ${displayType}${isReview?' · Fehlerwiederholung':''}</span><h2>${title}</h2><p class="muted">${description}</p></div>
     <div class="grid">
       <div class="stat"><strong>${Q.length}</strong>Fragen im Pool</div>
       <div class="stat"><strong>${done}</strong>in dieser Runde beantwortet</div>
@@ -286,7 +297,7 @@ function renderQ(){
   const correctSoFar=Object.values(S.answers).filter(a=>a.ok).length;
   const hintUsed=!!(prev?.hint||S.hints[q.id]),flagged=!!S.flags[q.id];
   quiz.innerHTML=`
-    <div class="meta"><span>Fragentyp ${ACTIVE_TYPE} · Frage ${S.i+1} / ${arr.length}</span><span>${correctSoFar} richtig${prev?' · beantwortet':''}</span></div>
+    <div class="meta"><span>AMOC Fragentyp ${ACTIVE_TYPE===4?3:ACTIVE_TYPE} · Frage ${S.i+1} / ${arr.length}</span><span>${correctSoFar} richtig${prev?' · beantwortet':''}</span></div>
     <div class="progress"><span style="width:${pct}%"></span></div>
     <div class="question">${esc(q.q)}</div>
     <div class="answers">${perm.map((origIndex,displayIndex)=>{
@@ -403,7 +414,7 @@ function results(){
   const rows=Object.values(group).sort((a,b)=>a.c/a.n-b.c/b.n).map(g=>{const p=Math.round(g.c/g.n*100);return`<tr><td>${esc(g.topic)}<div class="small muted">${esc(g.part)}</div></td><td>${g.c}/${g.n}</td><td><div class="bar"><span style="width:${p}%"></span></div>${p}%</td><td>${g.h}</td><td>${g.u}</td></tr>`}).join('');
   const report=reportText(ans,group);if(S.mode==='full'&&ans.length)localStorage.setItem(LAST_REPORT,report);
   result.innerHTML=`
-    <h2>Auswertung · Fragentyp ${ACTIVE_TYPE}</h2>
+    <h2>Auswertung · AMOC Fragentyp ${ACTIVE_TYPE===4?3:ACTIVE_TYPE}</h2>
     <div class="grid"><div class="stat"><strong>${correct}/${ans.length}</strong>richtig</div><div class="stat"><strong>${pct}%</strong>Trefferquote</div><div class="stat"><strong>${hints}</strong>Hinweise</div><div class="stat"><strong>${unsure}</strong>unsicher</div></div>
     <table class="result-table"><thead><tr><th>Thema</th><th>Richtig</th><th>Quote</th><th>Hinweise</th><th>Unsicher</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="actions"><button class="primary" id="resume">${S.frontier<S.order.length?'Test fortsetzen':'Zur Übersicht'}</button>${wrong.length?'<button class="secondary" id="retry">Nur Fehler wiederholen</button>':''}${S.mode==='wrong'&&S.baseState?'<button class="secondary" id="restorebase">Zur ursprünglichen Auswertung</button>':''}<button class="secondary" id="copy">Ergebnisbericht kopieren</button><button class="ghost" id="backtypes">Fragentyp wechseln</button></div>
@@ -466,7 +477,7 @@ function reportRecall(ans){
 
 function reportText(ans,group){
   const correct=ans.filter(x=>x.ok).length,pct=ans.length?Math.round(correct/ans.length*100):0;
-  let s=`AMOC DIAGNOSE – FRAGENTYP ${ACTIVE_TYPE}\nGesamt: ${correct}/${ans.length} richtig (${pct}%) | Hinweise: ${ans.filter(x=>x.hint).length} | Unsicher: ${ans.filter(x=>x.unsure).length}\n\nTHEMEN:\n`;
+  let s=`AMOC DIAGNOSE – FRAGENTYP ${ACTIVE_TYPE===4?3:ACTIVE_TYPE}\nGesamt: ${correct}/${ans.length} richtig (${pct}%) | Hinweise: ${ans.filter(x=>x.hint).length} | Unsicher: ${ans.filter(x=>x.unsure).length}\n\nTHEMEN:\n`;
   for(const g of Object.values(group).sort((a,b)=>a.c/a.n-b.c/b.n))s+=`- ${g.part} / ${g.topic}: ${g.c}/${g.n} richtig, Hinweise ${g.h}, unsicher ${g.u}\n`;
   s+='\nFALSCHE ANTWORTEN:\n';
   for(const x of ans.filter(x=>!x.ok))s+=`\n[${x.q.part} | ${x.q.topic}] ${x.q.q}\nMeine Antwort: ${x.q.opts[x.sel].t}\nRichtig: ${x.q.opts[x.q.a].t}\nHinweis benutzt: ${x.hint?'ja':'nein'} | Unsicher: ${x.unsure?'ja':'nein'}\n`;
@@ -475,7 +486,7 @@ function reportText(ans,group){
 
 resetBtn.onclick=()=>{
   if(!ACTIVE_TYPE)return;
-  if(confirm(`Gespeicherten Fortschritt für Fragentyp ${ACTIVE_TYPE} löschen?`)){localStorage.removeItem(LS);S=freshState();homeView()}
+  if(confirm(`Gespeicherten Fortschritt für ${ACTIVE_TYPE===3?'den Antestat-Trainer':'AMOC Fragentyp '+(ACTIVE_TYPE===4?3:ACTIVE_TYPE)} löschen?`)){localStorage.removeItem(LS);S=freshState();homeView()}
 };
 
 async function inflateType3Data(){
